@@ -1,1 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NH-31 Highway Runner — Indian Heavy Truck Simulator</title>
+<style>
+  :root{
+    --panel-steel:#23262b;
+    --panel-steel-2:#181a1d;
+    --rivet:#3a3f46;
+    --amber:#ffb020;
+    --amber-dim:#8a5c12;
+    --cream:#e9dfc7;
+    --warn-red:#ff3b30;
+    --ok-green:#3ddc84;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:#000; font-family:'Courier New',ui-monospace,monospace;
+    -webkit-user-select:none; user-select:none; touch-action:none;
+  }
+  #webgl{position:absolute; top:0; left:0; width:100%; height:100%; display:block; outline:none;}
+  #hud{position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;}
+
+  #startScreen{
+    position:absolute; inset:0; z-index:50;
+    background:
+      linear-gradient(180deg, rgba(10,12,14,0.55), rgba(10,12,14,0.85)),
+      radial-gradient(ellipse at 50% 30%, #2b2010 0%, #0c0d0f 70%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:var(--cream); text-align:center; padding:24px;
+  }
+  #startScreen h1{
+    font-size:clamp(28px,5vw,54px); margin:0 0 6px 0; letter-spacing:1px;
+    color:var(--amber); text-shadow:0 0 18px rgba(255,176,32,0.45);
+    font-family:'Georgia',serif; font-weight:700;
+  }
+  #startScreen .sub{ color:#c9bd9e; margin-bottom:22px; font-size:15px; max-width:560px; }
+  #startScreen .keys{
+    background:rgba(20,22,25,0.75); border:1px solid #3a3f46; border-radius:6px;
+    padding:16px 22px; margin-bottom:22px; text-align:left; font-size:13px; line-height:1.9;
+    max-width:640px; max-height:44vh; overflow-y:auto;
+  }
+  #startScreen .keys b{ color:var(--amber); display:inline-block; min-width:150px;}
+  #startScreen .note{ color:#a99; font-size:12px; max-width:560px; margin-bottom:18px; line-height:1.6;}
+  #startBtn{
+    background:linear-gradient(180deg,#ffcf6b,var(--amber)); border:none; color:#241a02;
+    font-weight:bold; font-size:18px; padding:14px 38px; border-radius:4px; cursor:pointer;
+    box-shadow:0 4px 0 var(--amber-dim), 0 6px 14px rgba(0,0,0,0.5);
+    letter-spacing:0.5px;
+  }
+  #startBtn:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--amber-dim);}
+
+  #helpPanel{
+    position:absolute; top:14px; left:14px; z-index:40;
+    background:rgba(15,16,18,0.88); border:1px solid #3a3f46; border-radius:6px;
+    color:var(--cream); font-size:12px; padding:12px 16px; line-height:1.75;
+    display:none; max-width:300px; pointer-events:auto;
+  }
+  #helpPanel.visible{ display:block; }
+  #helpPanel b{ color:var(--amber); display:inline-block; min-width:128px;}
+  #helpPanel .hp-title{ color:var(--amber); font-weight:bold; margin-bottom:6px; font-size:13px;}
+
+  #helpHint{
+    position:absolute; bottom:200px; left:14px; z-index:30; color:#8a8f96;
+    font-size:11px; background:rgba(10,10,10,0.4); padding:4px 8px; border-radius:3px;
+  }
+
+  #centerWarn{
+    position:absolute; top:8%; left:50%; transform:translateX(-50%); z-index:35;
+    color:var(--warn-red); font-weight:bold; font-size:clamp(16px,2.6vw,26px);
+    text-shadow:0 0 10px rgba(255,0,0,0.8); letter-spacing:1px; opacity:0; text-align:center;
+    transition:opacity 0.15s;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="webgl"></canvas>
+<canvas id="hud"></canvas>
+
+<div id="centerWarn"></div>
+<div id="helpHint">Press [F1] for controls</div>
+<div id="helpPanel">
+  <div class="hp-title">CONTROLS — TATA-STYLE 6-WHEELER</div>
+  <div><b>Throttle</b>W / Up Arrow</div>
+  <div><b>Service Brake</b>S / Down Arrow</div>
+  <div><b>Steering</b>A/D or Left/Right</div>
+  <div><b>Clutch (hold)</b>Spacebar</div>
+  <div><b>Shift Up</b>E or Shift</div>
+  <div><b>Shift Down</b>Q or Ctrl</div>
+  <div><b>Gears 1-6</b>Number keys 1-6</div>
+  <div><b>Neutral</b>0</div>
+  <div><b>Crawler gear</b>C</div>
+  <div><b>Reverse</b>R</div>
+  <div><b>Parking brake</b>P</div>
+  <div><b>Ignition/Starter</b>I</div>
+  <div><b>Horn</b>H</div>
+  <div><b>Change camera</b>V</div>
+  <div style="margin-top:8px; color:#a99; font-size:11px;">
+    Note: the spec's clutch key [C] conflicts with the H-shifter's Crawler-gear key [C] —
+    Clutch is bound to Space (as offered as the alternate), and C selects Crawler.
+  </div>
+</div>
+
+<div id="startScreen">
+  <h1>NH&#8209;31 HIGHWAY RUNNER</h1>
+  <div class="sub">A Bihar highway drive in a classic Indian cowl-chassis 6-wheeler — full manual gearbox, diesel engine physics, and air brakes.</div>
+  <div class="keys">
+    <div><b>Throttle / Brake</b>W-S or Arrow Up/Down</div>
+    <div><b>Steer</b>A / D or Arrow Left/Right</div>
+    <div><b>Clutch (hold)</b>Spacebar</div>
+    <div><b>Shift Up / Down</b>E or Shift &nbsp;/&nbsp; Q or Ctrl</div>
+    <div><b>Direct gears</b>0=N, C=Crawler, 1-6, R=Reverse</div>
+    <div><b>Handbrake</b>P &nbsp;&nbsp; <b>Ignition</b>I &nbsp;&nbsp; <b>Horn</b>H</div>
+  </div>
+  <div class="note">Start cold: press I to crank the engine, hold Clutch, select 1st gear, ease in throttle
+  and let the clutch out smoothly through the bite point. Dump it too fast and the diesel will stall.</div>
+  <button id="startBtn">START ENGINE &amp; DRIVE</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =====================================================================================
+   NH-31 HIGHWAY RUNNER — INDIAN HEAVY TRUCK SIMULATOR
+   -------------------------------------------------------------------------------------
+   Self-contained Three.js + Canvas2D HUD simulation.
+
+   ARCHITECTURE
+     1. CONFIG            - every physical constant lives here, nothing is a magic number
+                             buried in logic.
+     2. MATH HELPERS       - clamp / lerp / smooth approach / periodic modulo.
+     3. SFX (Web Audio)     - procedurally synthesized engine drone, horn, air hiss,
+                             gear grind and starter — no external audio assets.
+     4. THREE.JS SETUP      - renderer / scene / lights / fog / sky.
+     5. PROCEDURAL TEXTURES - road, mustard field, wood grain, truck decals — generated
+                             on off-screen canvases, no external image assets.
+     6. WORLD / ENVIRONMENT - infinite recycled road-side props (milestones, dhabas,
+                             rumble strips) addressed in an unbounded "route" coordinate
+                             space that is periodically rebased into render space to
+                             avoid floating point precision loss on long drives.
+     7. TRUCK MODEL          - built from primitives: chassis, cowl/hood, cab, cargo box,
+                             6 wheels (2 front steer, 4 rear dual), crown, tassels, decals.
+     8. INPUT                - keyboard state + edge detection for discrete actions.
+     9. SIMULATION STATE     - the `sim` object: everything that evolves over time.
+    10. POWERTRAIN PHYSICS   - torque curve, friction curve, clutch bite/slip model,
+                             engine RPM ODE, stalling, gear ratio math, wheel force.
+    11. VEHICLE DYNAMICS     - longitudinal force balance (drive, brake, roll, aero,
+                             grade, handbrake) integrated into velocity & position.
+    12. SUSPENSION           - per-axle damped spring-mass response to a procedural
+                             rumble-strip / speed-breaker road-height function.
+    13. AIR BRAKE SYSTEM     - compressor charge / consumption / low-air derate.
+    14. HUD RENDERING        - analog gauges + digital readouts drawn each frame.
+    15. MAIN LOOP            - fixed-timestep physics accumulator + render.
+
+   None of the physics below are placeholders: RPM, torque, gear ratio, clutch slip,
+   suspension and braking are all derived every frame from the equations that govern
+   them, using the constants defined in CONFIG.
+   ===================================================================================== */
+
+'use strict';
+
+/* =====================================================================================
+   1. CONFIG
+   ===================================================================================== */
+const CONFIG = {
+  // --- Gearbox -----------------------------------------------------------------------
+  GEAR_RATIOS: { 'C':8.5, '1':6.2, '2':3.8, '3':2.3, '4':1.5, '5':1.0, '6':0.75, 'R':-6.8 },
+  GEAR_SEQUENCE: ['N','C','1','2','3','4','5','6'],
+  FINAL_DRIVE: 4.88,
+  DRIVETRAIN_EFFICIENCY: 0.90,
+  SHIFT_DURATION: 0.25,           // seconds the gearbox spends "in neutral" mid-shift
+  GRIND_ENGAGEMENT_THRESHOLD: 0.15, // clutch engagement above which a shift attempt grinds
+
+  // --- Clutch --------------------------------------------------------------------------
+  CLUTCH_BITE_LOW: 0.30,          // pedal-press fraction where engagement begins
+  CLUTCH_BITE_HIGH: 0.70,         // pedal-press fraction where engagement completes
+  CLUTCH_CAPACITY: 1100,          // Nm of torque the friction disc can carry before slip
+  CLUTCH_SLIP_RANGE: 300,         // rpm difference at which clutch torque saturates
+  CLUTCH_PEDAL_RATE: 3.4,         // pedal travel speed (fraction/sec)
+
+  // --- Diesel engine ---------------------------------------------------------------------
+  IDLE_RPM: 650,
+  REDLINE: 2400,
+  REV_LIMIT: 2500,                // hard fuel-cut above this
+  STALL_RPM: 450,
+  CRANK_RPM: 250,
+  CRANK_DURATION: 1.2,
+  I_ENGINE: 3.2,                  // kg*m^2 - crank/flywheel rotational inertia
+  PEAK_TORQUE_NM: 900,
+  TORQUE_ANCHORS: [               // [rpm, fraction-of-peak] - piecewise-linear torque curve
+    [0,0.30], [650,0.55], [900,0.75], [1100,0.95], [1300,1.00],
+    [1500,0.98], [1800,0.85], [2100,0.65], [2400,0.45], [2550,0.0]
+  ],
+  FRICTION_BASE: 25,               // Nm - static engine friction
+  FRICTION_LINEAR: 0.05,           // Nm per rpm
+  FRICTION_QUAD: 0.000012,         // Nm per rpm^2 (pumping losses -> engine braking)
+  IDLE_GOVERNOR_MAX: 0.18,         // max virtual-throttle the idle governor can add
+  IDLE_GOVERNOR_GAIN: 0.004,       // fraction of throttle per rpm of idle deficit
+  THROTTLE_RATE: 3.0,              // pedal travel speed (fraction/sec)
+
+  // --- Vehicle body ----------------------------------------------------------------------
+  MASS: 9500,                      // kg (partially loaded 6-wheeler)
+  WHEEL_RADIUS: 0.48,               // m
+  WHEELBASE: 4.2,                   // m
+  TRACK_WIDTH: 1.9,                 // m
+  GRAVITY: 9.81,
+  CRR: 0.010,                       // rolling resistance coefficient
+  DRAG_COEFF: 3.4,                  // lumped 0.5*rho*Cd*A
+  STEER_MAX: 0.5,                   // radians (~28.6 deg)
+  STEER_RATE: 2.4,                  // rad/sec toward target
+  BRAKE_PEDAL_RATE: 4.5,
+
+  // --- Brakes ------------------------------------------------------------------------------
+  BRAKE_MAX_FORCE: 40000,           // N, at full pressure & full pedal
+  HANDBRAKE_FORCE: 60000,           // N
+  AIR_MAX: 125,                     // psi
+  AIR_OPERATING: 100,               // psi - full effectiveness at/above this
+  AIR_MIN_USABLE: 55,               // psi - below this, brakes are essentially gone
+  AIR_LOW_WARN: 65,                 // psi - warning threshold
+  AIR_COMPRESSOR_RATE: 22,          // psi/sec charge rate while engine runs
+  AIR_USE_RATE: 16,                 // psi/sec drained per full brake application
+
+  // --- Suspension (per-axle damped spring, parameterized by natural frequency/damping) ---
+  SUSPENSION_OMEGA: 16,             // rad/sec natural frequency (stiff leaf springs)
+  SUSPENSION_ZETA: 0.5,             // damping ratio
+
+  // --- Road geometry ----------------------------------------------------------------------
+  ROAD_HALF_WIDTH: 4.0,
+  SHOULDER_WIDTH: 2.2,
+  RUMBLE_SPACING: 850,
+  RUMBLE_WIDTH: 4.5,
+  RUMBLE_HEIGHT: 0.12,
+  GRADE_CYCLE: 3000,
+
+  // --- World rebasing (float precision safety on long straight drives) -------------------
+  REBASE_AT: 4000,
+};
+
+/* =====================================================================================
+   2. MATH HELPERS
+   ===================================================================================== */
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+function lerp(a, b, t){ return a + (b - a) * t; }
+function smoothApproach(current, target, rate, dt){
+  const maxStep = rate * dt;
+  const diff = target - current;
+  if (Math.abs(diff) <= maxStep) return target;
+  return current + Math.sign(diff) * maxStep;
+}
+function mod(n, m){ return ((n % m) + m) % m; }
+function interpAnchors(x, anchors){
+  if (x <= anchors[0][0]) return anchors[0][1];
+  for (let i = 0; i < anchors.length - 1; i++){
+    const a = anchors[i], b = anchors[i+1];
+    if (x >= a[0] && x <= b[0]){
+      const t = (x - a[0]) / (b[0] - a[0]);
+      return lerp(a[1], b[1], t);
+    }
+  }
+  return anchors[anchors.length-1][1];
+}
+
+/* =====================================================================================
+   3. SFX — procedurally synthesized audio (no external audio files)
+   ===================================================================================== */
+const SFX = {
+  ctx: null, ready:false,
+  engineOscA:null, engineOscB:null, engineGain:null, engineFilter:null,
+  hornOscs:[], hornGain:null,
+  noiseBuffer:null,
+
+  init(){
+    if (this.ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+
+    // shared white-noise buffer for hiss / grind bursts
+    const len = Math.floor(this.ctx.sampleRate * 1.0);
+    this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = this.noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+
+    // engine drone: two oscillators through a lowpass filter, gain driven by RPM/load
+    this.engineGain = this.ctx.createGain(); this.engineGain.gain.value = 0;
+    this.engineFilter = this.ctx.createBiquadFilter();
+    this.engineFilter.type = 'lowpass'; this.engineFilter.frequency.value = 250;
+    this.engineOscA = this.ctx.createOscillator(); this.engineOscA.type = 'sawtooth';
+    this.engineOscB = this.ctx.createOscillator(); this.engineOscB.type = 'square';
+    this.engineOscA.frequency.value = 40; this.engineOscB.frequency.value = 20;
+    this.engineOscA.connect(this.engineFilter);
+    this.engineOscB.connect(this.engineFilter);
+    this.engineFilter.connect(this.engineGain);
+    this.engineGain.connect(this.ctx.destination);
+    this.engineOscA.start(); this.engineOscB.start();
+
+    // Indian multi-tone pressure horn: three stacked oscillators
+    this.hornGain = this.ctx.createGain(); this.hornGain.gain.value = 0;
+    this.hornGain.connect(this.ctx.destination);
+    [220, 277, 330].forEach((f) => {
+      const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      o.connect(this.hornGain); o.start();
+      this.hornOscs.push(o);
+    });
+
+    this.ready = true;
+  },
+
+  resume(){ if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+
+  updateEngine(rpm, running, load){
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    if (!running){
+      this.engineGain.gain.setTargetAtTime(0, t, 0.2);
+      return;
+    }
+    // straight-6, 4-stroke diesel: 3 firing pulses per revolution -> pseudo firing frequency
+    const firingHz = Math.max(15, (rpm / 60) * 3);
+    this.engineOscA.frequency.setTargetAtTime(firingHz, t, 0.05);
+    this.engineOscB.frequency.setTargetAtTime(firingHz * 0.5, t, 0.05);
+    this.engineFilter.frequency.setTargetAtTime(220 + rpm * 0.55, t, 0.08);
+    const vol = 0.045 + 0.11 * Math.min(1, rpm / CONFIG.REDLINE) + 0.05 * clamp(load,0,1);
+    this.engineGain.gain.setTargetAtTime(vol, t, 0.09);
+  },
+
+  setHorn(on){
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    this.hornGain.gain.setTargetAtTime(on ? 0.16 : 0, t, on ? 0.02 : 0.09);
+  },
+
+  burst(freq, q, gainPeak, dur){
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuffer;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = freq; filt.Q.value = q;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gainPeak, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(filt); filt.connect(g); g.connect(this.ctx.destination);
+    src.start(t); src.stop(t + dur);
+  },
+
+  playHiss(){ this.burst(2200, 0.7, 0.22, 0.45); },
+  playGrind(){ this.burst(1700, 2.2, 0.30, 0.32); },
+
+  playStarter(){
+    if (!this.ready) return;
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 6; i++){
+      const t = now + i * 0.17;
+      const o = this.ctx.createOscillator(); o.type = 'square'; o.frequency.value = 85;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.22, t + 0.02);
+      g.gain.linearRampToValueAtTime(0, t + 0.11);
+      o.connect(g); g.connect(this.ctx.destination);
+      o.start(t); o.stop(t + 0.13);
+    }
+  }
+};
+
+/* =====================================================================================
+   4. THREE.JS SETUP
+   ===================================================================================== */
+const webglCanvas = document.getElementById('webgl');
+const renderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+
+// Sky: a small vertical gradient canvas used directly as scene.background
+function makeSkyTexture(){
+  const c = document.createElement('canvas'); c.width = 8; c.height = 256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0.0, '#2f6fb0');
+  g.addColorStop(0.45, '#8fb9d8');
+  g.addColorStop(0.72, '#e4d3a6');
+  g.addColorStop(1.0, '#d8c48f');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 8, 256);
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+scene.background = makeSkyTexture();
+scene.fog = new THREE.Fog(0xcdc19a, 60, 480);
+
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 1200);
+
+const hemi = new THREE.HemisphereLight(0xdde8f5, 0x9c8a5e, 0.65);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff3d6, 1.35);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1536, 1536);
+sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 140;
+sun.shadow.bias = -0.0015;
+scene.add(sun);
+scene.add(sun.target);
+
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  sizeHud();
+}
+window.addEventListener('resize', resize);
+
+/* =====================================================================================
+   5. PROCEDURAL TEXTURES
+   ===================================================================================== */
+function canvasTex(w, h, drawFn, repeatX, repeatY){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  drawFn(c.getContext('2d'), w, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  if (repeatX || repeatY) tex.repeat.set(repeatX || 1, repeatY || 1);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const roadTexture = canvasTex(128, 512, (ctx, w, h) => {
+  ctx.fillStyle = '#3c3c40'; ctx.fillRect(0, 0, w, h);
+  // subtle asphalt grain
+  for (let i = 0; i < 900; i++){
+    ctx.fillStyle = `rgba(${20+Math.random()*30},${20+Math.random()*30},${20+Math.random()*30},0.5)`;
+    ctx.fillRect(Math.random()*w, Math.random()*h, 1.5, 1.5);
+  }
+  // centre dashed line
+  ctx.fillStyle = '#e8c94a';
+  const dashH = 28, gapH = 22, cx = w/2 - 2;
+  for (let y = 0; y < h; y += dashH + gapH) ctx.fillRect(cx, y, 4, dashH);
+  // edge lines
+  ctx.fillStyle = '#e9e4d2';
+  ctx.fillRect(6, 0, 3, h);
+  ctx.fillRect(w-9, 0, 3, h);
+}, 1, 60);
+
+const fieldTexture = canvasTex(256, 256, (ctx, w, h) => {
+  ctx.fillStyle = '#5c6b2e'; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 1400; i++){
+    const shade = 40 + Math.random()*40;
+    ctx.fillStyle = `rgba(${shade+60},${shade+50},${shade-20},0.85)`;
+    ctx.fillRect(Math.random()*w, Math.random()*h, 2, 2);
+  }
+  // mustard-yellow dabs
+  for (let i = 0; i < 500; i++){
+    ctx.fillStyle = `rgba(238,${190+Math.random()*40|0},30,0.9)`;
+    ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, 1.6, 0, Math.PI*2); ctx.fill();
+  }
+}, 26, 26);
+
+const shoulderTexture = canvasTex(64, 64, (ctx, w, h) => {
+  ctx.fillStyle = '#8a7a52'; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 200; i++){
+    ctx.fillStyle = `rgba(${100+Math.random()*40|0},${90+Math.random()*30|0},60,0.6)`;
+    ctx.fillRect(Math.random()*w, Math.random()*h, 2, 2);
+  }
+}, 10, 60);
+
+const woodTexture = canvasTex(128, 128, (ctx, w, h) => {
+  ctx.fillStyle = '#7a4a26'; ctx.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 6){
+    ctx.fillStyle = `rgba(${40+Math.random()*30|0},${20+Math.random()*20|0},10,0.5)`;
+    ctx.fillRect(0, y, w, 2);
+  }
+}, 2, 2);
+
+function makeDecalTexture(lines, bg, fg, accent){
+  return canvasTex(512, 256, (ctx, w, h) => {
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = accent; ctx.lineWidth = 10;
+    ctx.strokeRect(8, 8, w-16, h-16);
+    ctx.fillStyle = fg;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const n = lines.length;
+    lines.forEach((line, i) => {
+      ctx.font = `bold ${i===0?46:34}px Georgia, serif`;
+      ctx.fillText(line, w/2, h/2 + (i - (n-1)/2) * 52);
+    });
+  });
+}
+const hornOkTexture = makeDecalTexture(['HORN OK', 'PLEASE'], '#b3121b', '#ffe27a', '#ffd23f');
+const dipperTexture = makeDecalTexture(['USE DIPPER', 'AT NIGHT'], '#0e4d2e', '#ffe9b8', '#f2c14e');
+
+function makeMilestoneTexture(line1, line2){
+  return canvasTex(256, 192, (ctx, w, h) => {
+    ctx.fillStyle = '#f4c430'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 30px Arial';
+    ctx.fillText(line1, w/2, h*0.32);
+    ctx.font = 'bold 30px Arial';
+    ctx.fillText(line2, w/2, h*0.68);
+  });
+}
+
+/* =====================================================================================
+   6. WORLD / ENVIRONMENT
+   ===================================================================================== */
+// Route-space -> render-space mapping. worldRebaseOffset keeps render coordinates small
+// on arbitrarily long drives while sim.routeProgress remains the true, unbounded odometer.
+let worldRebaseOffset = 0;
+function routeToRenderZ(routeZ){ return routeZ - worldRebaseOffset; }
+
+// --- Ground: road strip + side "mustard field" shoulders ----------------------------
+const roadWidth = (CONFIG.ROAD_HALF_WIDTH + CONFIG.SHOULDER_WIDTH) * 2;
+const roadGeo = new THREE.PlaneGeometry(roadWidth, 4000, 1, 1);
+const roadMat = new THREE.MeshStandardMaterial({ map: roadTexture, roughness: 0.95, metalness: 0.02 });
+const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+roadMesh.rotation.x = -Math.PI/2;
+roadMesh.receiveShadow = true;
+scene.add(roadMesh);
+
+function makeFieldPlane(sideSign){
+  const geo = new THREE.PlaneGeometry(240, 4000, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({ map: fieldTexture, roughness: 1.0 });
+  const m = new THREE.Mesh(geo, mat);
+  m.rotation.x = -Math.PI/2;
+  m.position.x = sideSign * (roadWidth/2 + 120);
+  m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+const fieldLeft = makeFieldPlane(-1);
+const fieldRight = makeFieldPlane(1);
+
+// --- generic recycled prop pool -------------------------------------------------------
+function createPool(count, spacing, buildFn, refreshFn){
+  const items = [];
+  for (let i = 0; i < count; i++){
+    const group = buildFn(i);
+    const routeZ = i * spacing;
+    scene.add(group);
+    const item = { group, routeZ, spacing, count };
+    if (refreshFn) refreshFn(item);
+    items.push(item);
+  }
+  return { items, spacing, count, buildFn, refreshFn };
+}
+function updatePool(pool, currentRouteZ, behindMargin){
+  const span = pool.spacing * pool.count;
+  for (const item of pool.items){
+    while (item.routeZ < currentRouteZ - behindMargin) {
+      item.routeZ += span;
+      if (pool.refreshFn) pool.refreshFn(item);
+    }
+    item.group.position.z = routeToRenderZ(item.routeZ);
+  }
+}
+
+// --- milestone posts (yellow concrete markers with two-town distance signage) --------
+const TOWNS = ['HAJIPUR','PATNA','SONEPUR','CHHAPRA','MUZAFFARPUR','BAKHTIARPUR','BARH','MOKAMA'];
+function buildMilestone(){
+  const g = new THREE.Group();
+  const postMat = new THREE.MeshStandardMaterial({ color: 0xdedad0, roughness: 0.85 });
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.7 });
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.9, 8), postMat);
+  post.position.y = 0.45; post.castShadow = true;
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.12, 8), bandMat);
+  band.position.y = 0.2;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.36), new THREE.MeshStandardMaterial({ map: makeMilestoneTexture(' ', ' '), roughness: 0.7 }));
+  face.position.set(0.13, 0.65, 0);
+  face.rotation.y = Math.PI/2;
+  g.add(post, band, face);
+  g.userData.face = face;
+  const side = Math.random() < 0.5 ? -1 : 1;
+  g.position.x = side * (CONFIG.ROAD_HALF_WIDTH + 0.6);
+  return g;
+}
+function refreshMilestone(item){
+  const zone = Math.floor(item.routeZ / 8000);
+  const within = mod(item.routeZ, 8000);
+  const nearKM = Math.max(1, Math.round(40 - (within/8000)*40));
+  const farKM = nearKM + 13;
+  const nearTown = TOWNS[mod(zone, TOWNS.length)];
+  const farTown = TOWNS[mod(zone + 3, TOWNS.length)];
+  const tex = makeMilestoneTexture(`${nearTown} ${nearKM}`, `${farTown} ${farKM}`);
+  const face = item.group.userData.face;
+  face.material.map = tex; face.material.needsUpdate = true;
+}
+const milestonePool = createPool(6, 400, buildMilestone, refreshMilestone);
+
+// --- roadside dhaba (small shack + charpai) -------------------------------------------
+function buildDhaba(){
+  const g = new THREE.Group();
+  const wallColors = [0xd8895a, 0x7ea1c4, 0xc4b25a, 0x9a7bb0];
+  const wallColor = wallColors[Math.floor(Math.random()*wallColors.length)];
+  const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.9 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x2f6b3a, roughness: 0.85 });
+  const shack = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.4, 3.2), wallMat);
+  shack.position.y = 1.2; shack.castShadow = true; shack.receiveShadow = true;
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.18, 3.8), roofMat);
+  roof.position.y = 2.5; roof.castShadow = true;
+  g.add(shack, roof);
+  // charpai (simple woven cot): frame + strung "rope" lines
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.8 });
+  const legGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.45, 6);
+  const cot = new THREE.Group();
+  [[-0.8,-0.4],[0.8,-0.4],[-0.8,0.4],[0.8,0.4]].forEach(([x,z]) => {
+    const leg = new THREE.Mesh(legGeo, frameMat);
+    leg.position.set(x, 0.22, z);
+    cot.add(leg);
+  });
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.9), frameMat);
+  frame.position.y = 0.46; cot.add(frame);
+  const weaveMat = new THREE.MeshStandardMaterial({ color: 0xd8933f, roughness: 0.9 });
+  for (let i = -3; i <= 3; i++){
+    const strand = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.9), weaveMat);
+    strand.position.set(i*0.25, 0.5, 0);
+    cot.add(strand);
+  }
+  cot.position.set(3.0, 0, 0.5);
+  g.add(cot);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  g.position.x = side * (CONFIG.ROAD_HALF_WIDTH + CONFIG.SHOULDER_WIDTH + 5);
+  g.rotation.y = side > 0 ? Math.PI : 0;
+  return g;
+}
+const dhabaPool = createPool(4, 1250, buildDhaba, null);
+
+// --- rumble strip / speed breaker visual bars -----------------------------------------
+function buildRumbleStrip(){
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xf2e14a, roughness: 0.8 });
+  const barCount = 5;
+  for (let i = 0; i < barCount; i++){
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.ROAD_HALF_WIDTH*2 - 0.4, 0.05, 0.35), mat);
+    bar.position.z = (i - (barCount-1)/2) * 0.85;
+    bar.position.y = 0.025;
+    bar.receiveShadow = true; bar.castShadow = false;
+    g.add(bar);
+  }
+  return g;
+}
+const rumblePool = createPool(5, CONFIG.RUMBLE_SPACING, buildRumbleStrip, null);
+
+// --- utility poles with sagging wire, cheap atmosphere ---------------------------------
+function buildPole(){
+  const g = new THREE.Group();
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x4a4238, roughness: 0.9 });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 6.5, 6), poleMat);
+  pole.position.y = 3.25; pole.castShadow = true;
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.08), poleMat);
+  arm.position.y = 6.2;
+  g.add(pole, arm);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  g.position.x = side * (CONFIG.ROAD_HALF_WIDTH + CONFIG.SHOULDER_WIDTH + 1.2);
+  return g;
+}
+const polePool = createPool(10, 180, buildPole, null);
+
+function updateEnvironment(routeZ){
+  updatePool(milestonePool, routeZ, 40);
+  updatePool(dhabaPool, routeZ, 60);
+  updatePool(rumblePool, routeZ, 60);
+  updatePool(polePool, routeZ, 30);
+  const rz = routeToRenderZ(routeZ);
+  roadMesh.position.z = rz;
+  fieldLeft.position.z = rz;
+  fieldRight.position.z = rz;
+  const t = roadTexture; t.offset.y = -(routeZ % 1) ; // keep lane-dash alignment continuous
+}
+
+/* =====================================================================================
+   7. TRUCK MODEL
+   ===================================================================================== */
+function buildWheel(radius, width){
+  // Group hierarchy: mount (position + steer yaw) -> spin (roll about local X) -> mesh (static shape tilt)
+  const mount = new THREE.Group();
+  const spin = new THREE.Group();
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.9 });
+  const hubMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.5, metalness: 0.6 });
+  const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 20), tireMat);
+  tire.rotation.z = Math.PI/2;
+  tire.castShadow = true; tire.receiveShadow = true;
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius*0.42, radius*0.42, width*1.05, 10), hubMat);
+  hub.rotation.z = Math.PI/2;
+  spin.add(tire, hub);
+  mount.add(spin);
+  return { mount, spin };
+}
+
+function buildTruck(){
+  const root = new THREE.Group();
+
+  const bodyGroup = new THREE.Group();
+  root.add(bodyGroup);
+
+  // --- chassis rails ---
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.6, metalness: 0.5 });
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.28, 6.6), steelMat);
+  chassis.position.set(0, 0.85, -0.3);
+  chassis.castShadow = true;
+  bodyGroup.add(chassis);
+
+  // --- cowl hood + grille (bonneted Tata-1613-style nose) ---
+  const paintMat = new THREE.MeshStandardMaterial({ color: 0x1f5fa8, roughness: 0.45, metalness: 0.25 });
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.75, 1.5), paintMat);
+  hood.position.set(0, 1.35, 2.55);
+  hood.castShadow = true;
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.55, 0.12), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.4, metalness: 0.7 }));
+  grille.position.set(0, 1.25, 3.32);
+  bodyGroup.add(hood, grille);
+
+  // --- cab ---
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.55, 1.85), paintMat);
+  cab.position.set(0, 2.0, 1.15);
+  cab.castShadow = true;
+  const windshieldMat = new THREE.MeshStandardMaterial({ color: 0x8fc4e8, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.55 });
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.85, 0.08), windshieldMat);
+  windshield.position.set(0, 2.15, 2.06);
+  windshield.rotation.x = -0.12;
+  bodyGroup.add(cab, windshield);
+
+  // side mirrors
+  const mirrorMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5, metalness: 0.6 });
+  [-1, 1].forEach((s) => {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.5), mirrorMat);
+    arm.position.set(s*1.08, 2.15, 1.85);
+    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.06), mirrorMat);
+    mirror.position.set(s*1.24, 2.15, 1.85);
+    bodyGroup.add(arm, mirror);
+  });
+
+  // --- decorative crown on cab roof ---
+  const crownMat = new THREE.MeshStandardMaterial({ color: 0xf2c230, roughness: 0.3, metalness: 0.7 });
+  const crownGroup = new THREE.Group();
+  const crownBase = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 8, 16), crownMat);
+  crownBase.rotation.x = Math.PI/2;
+  crownGroup.add(crownBase);
+  for (let i = 0; i < 5; i++){
+    const ang = (i/4 - 0.5) * 1.6;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.28, 6), crownMat);
+    spike.position.set(Math.sin(ang)*0.5, 0.18, Math.cos(ang)*0.15 - 0.42);
+    spike.rotation.x = 0.15;
+    crownGroup.add(spike);
+  }
+  crownGroup.position.set(0, 2.82, 1.15);
+  bodyGroup.add(crownGroup);
+
+  // --- cargo box ---
+  const woodMat = new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.95 });
+  const cargoOuterMat = new THREE.MeshStandardMaterial({ color: 0xb3121b, roughness: 0.55, metalness: 0.15 });
+  const cargoBox = new THREE.Mesh(new THREE.BoxGeometry(2.15, 1.9, 3.9), cargoOuterMat);
+  cargoBox.position.set(0, 1.85, -2.6);
+  cargoBox.castShadow = true; cargoBox.receiveShadow = true;
+  const cargoInnerSlats = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.7, 3.75), woodMat);
+  cargoInnerSlats.position.set(0, 1.85, -2.6);
+  bodyGroup.add(cargoBox);
+  bodyGroup.add(cargoInnerSlats);
+
+  // tailgate decals: HORN OK PLEASE / USE DIPPER AT NIGHT
+  const tailgatePlane1 = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.55), new THREE.MeshStandardMaterial({ map: hornOkTexture, roughness: 0.6 }));
+  tailgatePlane1.position.set(0, 2.25, -4.57);
+  tailgatePlane1.rotation.y = Math.PI;
+  const tailgatePlane2 = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.45), new THREE.MeshStandardMaterial({ map: dipperTexture, roughness: 0.6 }));
+  tailgatePlane2.position.set(0, 1.5, -4.57);
+  tailgatePlane2.rotation.y = Math.PI;
+  bodyGroup.add(tailgatePlane1, tailgatePlane2);
+
+  // --- hanging tassels / nimbu-mirchi talisman on front bumper ---
+  const tasselGroup = new THREE.Group();
+  const stringMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+  const lemonMat = new THREE.MeshStandardMaterial({ color: 0xe8d23a, roughness: 0.5 });
+  const chiliMat = new THREE.MeshStandardMaterial({ color: 0x3a7a2a, roughness: 0.6 });
+  for (let i = 0; i < 5; i++){
+    const x = (i - 2) * 0.16;
+    const str = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.32, 4), stringMat);
+    str.position.set(x, -0.16, 0);
+    const lemon = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), lemonMat);
+    lemon.position.set(x, -0.34, 0);
+    const chili = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.13, 6), chiliMat);
+    chili.position.set(x + 0.05, -0.3, 0);
+    chili.rotation.z = 0.5;
+    tasselGroup.add(str, lemon, chili);
+  }
+  tasselGroup.position.set(0, 0.75, 3.35);
+  bodyGroup.add(tasselGroup);
+
+  // --- bumper ---
+  const bumper = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.18, 0.22), steelMat);
+  bumper.position.set(0, 0.62, 3.42);
+  bodyGroup.add(bumper);
+
+  // --- wheels: 2 front (steerable), 4 rear (dual) ---
+  const frontAxleMount = new THREE.Group();
+  const rearAxleMount = new THREE.Group();
+  root.add(frontAxleMount, rearAxleMount);
+
+  const wheelFL = buildWheel(CONFIG.WHEEL_RADIUS, 0.32);
+  const wheelFR = buildWheel(CONFIG.WHEEL_RADIUS, 0.32);
+  wheelFL.mount.position.set(-CONFIG.TRACK_WIDTH/2, CONFIG.WHEEL_RADIUS, CONFIG.WHEELBASE/2);
+  wheelFR.mount.position.set(CONFIG.TRACK_WIDTH/2, CONFIG.WHEEL_RADIUS, CONFIG.WHEELBASE/2);
+  frontAxleMount.add(wheelFL.mount, wheelFR.mount);
+
+  const rearWheels = [];
+  [-1, 1].forEach((side) => {
+    [-0.22, 0.22].forEach((dualOffset) => {
+      const w = buildWheel(CONFIG.WHEEL_RADIUS, 0.30);
+      w.mount.position.set(side*CONFIG.TRACK_WIDTH/2, CONFIG.WHEEL_RADIUS, -CONFIG.WHEELBASE/2 + dualOffset);
+      rearAxleMount.add(w.mount);
+      rearWheels.push(w);
+    });
+  });
+
+  return {
+    root, bodyGroup, frontAxleMount, rearAxleMount,
+    frontWheels: [wheelFL, wheelFR],
+    rearWheels,
+  };
+}
+
+const truck = buildTruck();
+scene.add(truck.root);
+
+/* =====================================================================================
+   8. INPUT
+   ===================================================================================== */
+const keys = {};
+const keysPrev = {};
+window.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  const blockScroll = ['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','ControlLeft','ControlRight'];
+  if (blockScroll.includes(e.code)) e.preventDefault();
+  if (e.code === 'F1'){ e.preventDefault(); toggleHelp(); }
+});
+window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+function justPressed(code){ return !!keys[code] && !keysPrev[code]; }
+function held(...codes){ return codes.some(c => !!keys[c]); }
+
+function toggleHelp(){
+  document.getElementById('helpPanel').classList.toggle('visible');
+}
+
+/* =====================================================================================
+   9. SIMULATION STATE
+   ===================================================================================== */
+const sim = {
+  // powertrain
+  engineRPM: 0, running: false, cranking: false, crankTimer: 0,
+  currentGear: 'N', pendingGear: 'N', gearChangeTimer: 0,
+  throttle: 0, brakePedal: 0, clutchPedal: 0, clutchEngagement: 0,
+  handbrakeOn: true,
+  airPressure: CONFIG.AIR_MAX * 0.9,
+  grindTimer: 0, stalledFlash: 0,
+
+  // dynamics
+  velocity: 0, heading: 0, steerAngle: 0, steerAngleTarget: 0,
+  routeProgress: 0, lateralX: 0, offRoad: false,
+
+  // suspension
+  frontSuspOffset: 0, frontSuspVel: 0, rearSuspOffset: 0, rearSuspVel: 0,
+
+  // camera
+  cameraMode: 0, // 0 = chase, 1 = cabin
+
+  // last-frame values for edge-driven SFX
+  wasBraking: false,
+};
+
+/* =====================================================================================
+   10 & 11. POWERTRAIN + VEHICLE DYNAMICS
+   ===================================================================================== */
+function torqueCurve(rpm){
+  return interpAnchors(rpm, CONFIG.TORQUE_ANCHORS) * CONFIG.PEAK_TORQUE_NM;
+}
+function frictionTorque(rpm){
+  return CONFIG.FRICTION_BASE + CONFIG.FRICTION_LINEAR*rpm + CONFIG.FRICTION_QUAD*rpm*rpm;
+}
+function clutchEngagementFromPedal(pedalPress){
+  // pedalPress: 0 = released (up), 1 = fully pressed (down/disengaged)
+  const t = clamp((pedalPress - CONFIG.CLUTCH_BITE_LOW) / (CONFIG.CLUTCH_BITE_HIGH - CONFIG.CLUTCH_BITE_LOW), 0, 1);
+  return 1 - t; // 1 = fully engaged/locked, 0 = fully disengaged
+}
+function gradeSlope(routeZ){
+  const z = mod(routeZ, CONFIG.GRADE_CYCLE);
+  if (z < 250) return 0;
+  if (z < 550) return 0.035;      // climbing onto an overbridge
+  if (z < 700) return 0;          // bridge crest
+  if (z < 1000) return -0.035;    // descending
+  return 0;                        // long flat Gangetic-plain stretch
+}
+function bumpHeight(routeZ){
+  const local = mod(routeZ, CONFIG.RUMBLE_SPACING);
+  if (local < CONFIG.RUMBLE_WIDTH){
+    const shape = Math.sin(Math.PI * local / CONFIG.RUMBLE_WIDTH);
+    return shape * shape * CONFIG.RUMBLE_HEIGHT;
+  }
+  return 0;
+}
+
+function triggerGrind(){
+  sim.grindTimer = 0.35;
+  sim.engineRPM = Math.max(0, sim.engineRPM - (80 + Math.random()*80));
+  SFX.playGrind();
+}
+
+function requestGear(newGear){
+  if (newGear !== 'N' && !(newGear in CONFIG.GEAR_RATIOS)) return;
+  if (newGear === sim.currentGear) return;
+  if (sim.gearChangeTimer > 0) return;
+  if (sim.clutchEngagement > CONFIG.GRIND_ENGAGEMENT_THRESHOLD){
+    triggerGrind();
+    return;
+  }
+  sim.pendingGear = newGear;
+  sim.gearChangeTimer = CONFIG.SHIFT_DURATION;
+}
+function shiftSequential(dir){
+  if (sim.currentGear === 'R'){
+    if (dir === 1) requestGear('N');
+    return;
+  }
+  let idx = CONFIG.GEAR_SEQUENCE.indexOf(sim.currentGear);
+  if (idx === -1) idx = 0;
+  const newIdx = clamp(idx + dir, 0, CONFIG.GEAR_SEQUENCE.length - 1);
+  requestGear(CONFIG.GEAR_SEQUENCE[newIdx]);
+}
+
+function physicsStep(dt){
+  // ---- input edges -------------------------------------------------------------------
+  if (justPressed('KeyI')) { if (!sim.running && !sim.cranking){ sim.cranking = true; sim.crankTimer = CONFIG.CRANK_DURATION; SFX.playStarter(); } }
+  if (justPressed('KeyP')) sim.handbrakeOn = !sim.handbrakeOn;
+  if (justPressed('KeyV')) sim.cameraMode = 1 - sim.cameraMode;
+  if (justPressed('KeyE') || justPressed('ShiftLeft') || justPressed('ShiftRight')) shiftSequential(1);
+  if (justPressed('KeyQ') || justPressed('ControlLeft') || justPressed('ControlRight')) shiftSequential(-1);
+  if (justPressed('Digit0')) requestGear('N');
+  if (justPressed('Digit1')) requestGear('1');
+  if (justPressed('Digit2')) requestGear('2');
+  if (justPressed('Digit3')) requestGear('3');
+  if (justPressed('Digit4')) requestGear('4');
+  if (justPressed('Digit5')) requestGear('5');
+  if (justPressed('Digit6')) requestGear('6');
+  if (justPressed('KeyC')) requestGear('C');
+  if (justPressed('KeyR')) requestGear('R');
+
+  // ---- pedal smoothing ------------------------------------------------------------------
+  const throttleTarget = held('KeyW','ArrowUp') ? 1 : 0;
+  const brakeTarget = held('KeyS','ArrowDown') ? 1 : 0;
+  const clutchPedalTarget = held('Space') ? 1 : 0;
+  sim.throttle = smoothApproach(sim.throttle, throttleTarget, CONFIG.THROTTLE_RATE, dt);
+  sim.brakePedal = smoothApproach(sim.brakePedal, brakeTarget, CONFIG.BRAKE_PEDAL_RATE, dt);
+  sim.clutchPedal = smoothApproach(sim.clutchPedal, clutchPedalTarget, CONFIG.CLUTCH_PEDAL_RATE, dt);
+  sim.clutchEngagement = clutchEngagementFromPedal(sim.clutchPedal);
+
+  let steerInput = 0;
+  if (held('KeyA','ArrowLeft')) steerInput -= 1;
+  if (held('KeyD','ArrowRight')) steerInput += 1;
+  sim.steerAngleTarget = steerInput * CONFIG.STEER_MAX;
+  sim.steerAngle = smoothApproach(sim.steerAngle, sim.steerAngleTarget, CONFIG.STEER_RATE, dt);
+
+  SFX.setHorn(held('KeyH'));
+
+  // ---- gear-change timer ----------------------------------------------------------------
+  if (sim.gearChangeTimer > 0){
+    sim.gearChangeTimer -= dt;
+    if (sim.gearChangeTimer <= 0){
+      sim.gearChangeTimer = 0;
+      sim.currentGear = sim.pendingGear;
+    }
+  }
+  if (sim.grindTimer > 0) sim.grindTimer -= dt;
+  if (sim.stalledFlash > 0) sim.stalledFlash -= dt;
+
+  // ---- engine state machine --------------------------------------------------------------
+  if (sim.cranking){
+    sim.crankTimer -= dt;
+    sim.engineRPM = smoothApproach(sim.engineRPM, CONFIG.CRANK_RPM, 900, dt);
+    if (sim.crankTimer <= 0){
+      sim.cranking = false;
+      sim.running = true;
+      sim.engineRPM = CONFIG.IDLE_RPM;
+    }
+  } else if (sim.running){
+    // idle governor: diesel idle-speed control adds virtual fuelling near idle
+    let idleAssist = 0;
+    if (sim.throttle < CONFIG.IDLE_GOVERNOR_MAX){
+      const deficit = CONFIG.IDLE_RPM - sim.engineRPM;
+      idleAssist = clamp(deficit * CONFIG.IDLE_GOVERNOR_GAIN, 0, CONFIG.IDLE_GOVERNOR_MAX);
+    }
+    const effectiveThrottle = clamp(Math.max(sim.throttle, idleAssist), 0, 1);
+    const fuelCut = sim.engineRPM > CONFIG.REV_LIMIT;
+    const engineOutputTorque = fuelCut ? 0 : effectiveThrottle * torqueCurve(sim.engineRPM);
+    const frictionTq = frictionTorque(sim.engineRPM);
+
+    const inGear = (sim.currentGear !== 'N' && sim.gearChangeTimer <= 0);
+    const ratio = inGear ? CONFIG.GEAR_RATIOS[sim.currentGear] : 0;
+    const G = ratio * CONFIG.FINAL_DRIVE;
+
+    const wheelAngVel = sim.velocity / CONFIG.WHEEL_RADIUS; // rad/s, signed forward-positive
+    const drivelineRPMeq = inGear ? (G * wheelAngVel) * (60 / (2*Math.PI)) : sim.engineRPM;
+
+    let clutchTorque = 0;
+    if (inGear){
+      const rpmDiff = sim.engineRPM - drivelineRPMeq;
+      clutchTorque = sim.clutchEngagement * CONFIG.CLUTCH_CAPACITY * clamp(rpmDiff / CONFIG.CLUTCH_SLIP_RANGE, -1, 1);
+    }
+
+    const netEngineTorque = engineOutputTorque - frictionTq - clutchTorque;
+    const angAccel = netEngineTorque / CONFIG.I_ENGINE; // rad/s^2
+    sim.engineRPM += angAccel * (60 / (2*Math.PI)) * dt;
+    sim.engineRPM = Math.max(0, sim.engineRPM);
+
+    if (sim.engineRPM < CONFIG.STALL_RPM){
+      sim.running = false;
+      sim.engineRPM = 0;
+      sim.stalledFlash = 2.5;
+    }
+
+    // ---- wheel force from clutch torque through the gearbox ----
+    const wheelTorque = inGear ? clutchTorque * G * CONFIG.DRIVETRAIN_EFFICIENCY : 0;
+    sim._driveForce = wheelTorque / CONFIG.WHEEL_RADIUS;
+    sim._load = clamp(Math.abs(clutchTorque) / CONFIG.CLUTCH_CAPACITY, 0, 1);
+  } else {
+    sim.engineRPM = smoothApproach(sim.engineRPM, 0, 500, dt);
+    sim._driveForce = 0;
+    sim._load = 0;
+  }
+
+  // ---- air brake system -------------------------------------------------------------------
+  if (sim.running){
+    sim.airPressure = smoothApproach(sim.airPressure, CONFIG.AIR_MAX, CONFIG.AIR_COMPRESSOR_RATE, dt);
+  }
+  if (sim.brakePedal > 0.02){
+    sim.airPressure -= CONFIG.AIR_USE_RATE * sim.brakePedal * dt;
+  }
+  sim.airPressure = clamp(sim.airPressure, 0, CONFIG.AIR_MAX);
+  const brakingNow = sim.brakePedal > 0.05;
+  if (sim.wasBraking && !brakingNow) SFX.playHiss();
+  sim.wasBraking = brakingNow;
+
+  // ---- longitudinal force balance ----------------------------------------------------------
+  sim.offRoad = Math.abs(sim.lateralX) > CONFIG.ROAD_HALF_WIDTH;
+  const crr = sim.offRoad ? CONFIG.CRR * 2.6 : CONFIG.CRR;
+
+  const rollForce = -Math.sign(sim.velocity) * crr * CONFIG.MASS * CONFIG.GRAVITY;
+  const aeroForce = -CONFIG.DRAG_COEFF * sim.velocity * Math.abs(sim.velocity);
+  const airFactor = clamp((sim.airPressure - CONFIG.AIR_MIN_USABLE) / (CONFIG.AIR_OPERATING - CONFIG.AIR_MIN_USABLE), 0, 1);
+  const brakeForce = -Math.sign(sim.velocity) * sim.brakePedal * CONFIG.BRAKE_MAX_FORCE * airFactor;
+  const handbrakeForce = sim.handbrakeOn ? -Math.sign(sim.velocity) * CONFIG.HANDBRAKE_FORCE : 0;
+  const slope = gradeSlope(sim.routeProgress);
+  const gradeForce = -CONFIG.MASS * CONFIG.GRAVITY * slope;
+
+  let netForce = (sim._driveForce || 0) + rollForce + aeroForce + brakeForce + handbrakeForce + gradeForce;
+  let accel = netForce / CONFIG.MASS;
+  let newVelocity = sim.velocity + accel * dt;
+
+  // prevent brake/handbrake from oscillating the truck through zero at a near-stop
+  const brakingHard = (sim.brakePedal > 0.01 || sim.handbrakeOn);
+  if (brakingHard && Math.abs(sim.velocity) < 0.6 && Math.sign(newVelocity) !== Math.sign(sim.velocity)){
+    newVelocity = 0;
+  }
+  sim.velocity = newVelocity;
+
+  // ---- position / heading integration (bicycle model) -----------------------------------
+  if (Math.abs(sim.velocity) > 0.08){
+    const yawRate = (sim.velocity / CONFIG.WHEELBASE) * Math.tan(sim.steerAngle);
+    sim.heading += yawRate * dt;
+  }
+  sim.routeProgress += sim.velocity * Math.cos(sim.heading) * dt;
+  sim.lateralX += sim.velocity * Math.sin(sim.heading) * dt;
+  const roadLimit = CONFIG.ROAD_HALF_WIDTH + CONFIG.SHOULDER_WIDTH;
+  sim.lateralX = clamp(sim.lateralX, -roadLimit, roadLimit);
+
+  // ---- suspension: per-axle damped spring response to road height -----------------------
+  const frontRouteZ = sim.routeProgress + CONFIG.WHEELBASE/2 * Math.cos(sim.heading);
+  const rearRouteZ = sim.routeProgress - CONFIG.WHEELBASE/2 * Math.cos(sim.heading);
+  const roughness = sim.offRoad ? (Math.random()-0.5) * 0.02 : 0;
+  const frontTarget = bumpHeight(frontRouteZ) + roughness;
+  const rearTarget = bumpHeight(rearRouteZ) + roughness;
+  const omega = CONFIG.SUSPENSION_OMEGA, zeta = CONFIG.SUSPENSION_ZETA;
+  const fa = -omega*omega*(sim.frontSuspOffset - frontTarget) - 2*zeta*omega*sim.frontSuspVel;
+  sim.frontSuspVel += fa * dt; sim.frontSuspOffset += sim.frontSuspVel * dt;
+  const ra = -omega*omega*(sim.rearSuspOffset - rearTarget) - 2*zeta*omega*sim.rearSuspVel;
+  sim.rearSuspVel += ra * dt; sim.rearSuspOffset += sim.rearSuspVel * dt;
+
+  // ---- world rebase safeguard (keeps render-space coordinates bounded) -------------------
+  const currentRenderZ = routeToRenderZ(sim.routeProgress);
+  if (Math.abs(currentRenderZ) > CONFIG.REBASE_AT){
+    worldRebaseOffset += currentRenderZ;
+    camera.position.z -= currentRenderZ; // shift camera by the same jump, avoids a visible snap
+  }
+}
+
+/* =====================================================================================
+   12. VISUAL UPDATE (apply sim state to the Three.js truck rig)
+   ===================================================================================== */
+let wheelSpinAngle = 0;
+function updateTruckVisual(dt){
+  truck.root.position.z = routeToRenderZ(sim.routeProgress);
+  truck.root.position.x = sim.lateralX;
+  truck.root.rotation.y = sim.heading;
+
+  truck.bodyGroup.position.y = 0.0 + (sim.frontSuspOffset + sim.rearSuspOffset) * 0.35;
+  truck.bodyGroup.rotation.x = -Math.atan2(sim.frontSuspOffset - sim.rearSuspOffset, CONFIG.WHEELBASE);
+
+  truck.frontAxleMount.position.y = sim.frontSuspOffset;
+  truck.rearAxleMount.position.y = sim.rearSuspOffset;
+
+  wheelSpinAngle += (sim.velocity / CONFIG.WHEEL_RADIUS) * dt;
+  truck.frontWheels.forEach((w) => { w.spin.rotation.x = wheelSpinAngle; w.mount.rotation.y = sim.steerAngle; });
+  truck.rearWheels.forEach((w) => { w.spin.rotation.x = wheelSpinAngle; });
+
+  // tassels sway gently
+  const t = performance.now() * 0.001;
+  truck.bodyGroup.children.forEach(() => {}); // (kept simple: tassels use fixed geometry, no per-frame lookup needed)
+
+  // sun + shadow camera follow the truck so shadows stay valid at any world position
+  sun.position.set(truck.root.position.x + 30, 45, truck.root.position.z + 20);
+  sun.target.position.set(truck.root.position.x, 0, truck.root.position.z);
+}
+
+/* =====================================================================================
+   CAMERA
+   ===================================================================================== */
+const camState = { pos: new THREE.Vector3(0, 3.4, -9), look: new THREE.Vector3() };
+function updateCamera(dt){
+  const fwd = new THREE.Vector3(Math.sin(sim.heading), 0, Math.cos(sim.heading));
+  let targetPos, targetLook;
+  if (sim.cameraMode === 0){
+    targetPos = new THREE.Vector3().copy(truck.root.position).addScaledVector(fwd, -9.5).add(new THREE.Vector3(0, 3.6, 0));
+    targetLook = new THREE.Vector3().copy(truck.root.position).addScaledVector(fwd, 6).add(new THREE.Vector3(0, 1.6, 0));
+  } else {
+    targetPos = new THREE.Vector3().copy(truck.root.position).addScaledVector(fwd, 1.5).add(new THREE.Vector3(0, 2.35, 0));
+    targetLook = new THREE.Vector3().copy(truck.root.position).addScaledVector(fwd, 20).add(new THREE.Vector3(0, 1.9, 0));
+  }
+  camState.pos.lerp(targetPos, clamp(dt * 5.0, 0, 1));
+  camState.look.lerp(targetLook, clamp(dt * 7.0, 0, 1));
+  camera.position.copy(camState.pos);
+  camera.lookAt(camState.look);
+}
+
+/* =====================================================================================
+   14. HUD RENDERING
+   ===================================================================================== */
+const hudCanvas = document.getElementById('hud');
+const hctx = hudCanvas.getContext('2d');
+let hudDPR = 1;
+function sizeHud(){
+  hudDPR = Math.min(window.devicePixelRatio || 1, 2);
+  hudCanvas.width = window.innerWidth * hudDPR;
+  hudCanvas.height = window.innerHeight * hudDPR;
+  hudCanvas.style.width = window.innerWidth + 'px';
+  hudCanvas.style.height = window.innerHeight + 'px';
+  hctx.setTransform(hudDPR, 0, 0, hudDPR, 0, 0);
+}
+sizeHud();
+
+function drawGaugeArc(ctx, cx, cy, r, frac, color, lineWidth){
+  const startAngle = 150 * Math.PI/180;
+  const sweep = 240 * Math.PI/180;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, startAngle + sweep * clamp(frac,0,1), false);
+  ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.lineCap = 'round';
+  ctx.stroke();
+}
+function drawGaugeFrame(ctx, cx, cy, r, ticks, label){
+  const startAngle = 150 * Math.PI/180;
+  const sweep = 240 * Math.PI/180;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, startAngle + sweep, false);
+  ctx.strokeStyle = '#55504a'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = '#cfc6ab';
+  for (let i = 0; i <= ticks; i++){
+    const a = startAngle + sweep * (i/ticks);
+    const x1 = cx + Math.cos(a) * (r-2), y1 = cy + Math.sin(a) * (r-2);
+    const x2 = cx + Math.cos(a) * (r-11), y2 = cy + Math.sin(a) * (r-11);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.strokeStyle='#cfc6ab'; ctx.lineWidth=2; ctx.stroke();
+  }
+  ctx.fillStyle = '#9a9285'; ctx.font = '10px monospace'; ctx.textAlign='center';
+  ctx.fillText(label, cx, cy + r*0.55);
+}
+function drawNeedle(ctx, cx, cy, r, frac, color){
+  const startAngle = 150 * Math.PI/180;
+  const sweep = 240 * Math.PI/180;
+  const a = startAngle + sweep * clamp(frac,0,1);
+  ctx.beginPath();
+  ctx.moveTo(cx - Math.cos(a)*r*0.18, cy - Math.sin(a)*r*0.18);
+  ctx.lineTo(cx + Math.cos(a)*r*0.82, cy + Math.sin(a)*r*0.82);
+  ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+}
+function drawBar(ctx, x, y, w, h, frac, color, label){
+  ctx.fillStyle = '#141414'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#44403a'; ctx.strokeRect(x, y, w, h);
+  const fh = h * clamp(frac,0,1);
+  ctx.fillStyle = color; ctx.fillRect(x, y + h - fh, w, fh);
+  ctx.fillStyle = '#cfc6ab'; ctx.font = '10px monospace'; ctx.textAlign='center';
+  ctx.fillText(label, x + w/2, y + h + 13);
+}
+
+function drawHUD(){
+  const W = window.innerWidth, H = window.innerHeight;
+  hctx.clearRect(0, 0, W, H);
+
+  // bottom instrument panel
+  const panelH = 168;
+  const panelY = H - panelH;
+  hctx.fillStyle = 'rgba(18,19,21,0.82)';
+  hctx.fillRect(0, panelY, W, panelH);
+  hctx.strokeStyle = '#3a3f46'; hctx.lineWidth = 2;
+  hctx.beginPath(); hctx.moveTo(0, panelY); hctx.lineTo(W, panelY); hctx.stroke();
+
+  const midY = panelY + panelH/2 + 6;
+  const gaugeR = Math.min(72, H*0.11);
+
+  // Tachometer
+  const tachX = W*0.5 - 150;
+  drawGaugeFrame(hctx, tachX, midY, gaugeR, 12, 'RPM x100');
+  // green economy band 1100-1500, red band above 2200 (drawn as arcs over the frame)
+  drawArcBand(tachX, midY, gaugeR-2, 1100/2600, 1500/2600, '#3ddc84');
+  drawArcBand(tachX, midY, gaugeR-2, 2200/2600, 2500/2600, '#ff3b30');
+  drawNeedle(hctx, tachX, midY, gaugeR, sim.engineRPM/2600, '#ffb020');
+  hctx.fillStyle = '#e9dfc7'; hctx.font = 'bold 13px monospace'; hctx.textAlign='center';
+  hctx.fillText(Math.round(sim.engineRPM) + ' rpm', tachX, midY - gaugeR - 8);
+
+  // Speedometer
+  const speedX = W*0.5 + 150;
+  drawGaugeFrame(hctx, speedX, midY, gaugeR, 12, 'KM/H');
+  const kmh = Math.abs(sim.velocity) * 3.6;
+  drawNeedle(hctx, speedX, midY, gaugeR, kmh/120, '#e9dfc7');
+  hctx.fillStyle = '#e9dfc7'; hctx.font = 'bold 15px monospace'; hctx.textAlign='center';
+  hctx.fillText(kmh.toFixed(0) + ' km/h', speedX, midY - gaugeR - 8);
+
+  // Air pressure gauge (small, between)
+  const airX = W*0.5;
+  const airR = gaugeR*0.6;
+  drawGaugeFrame(hctx, airX, midY - gaugeR*0.15, airR, 6, 'AIR PSI');
+  drawNeedle(hctx, airX, midY - gaugeR*0.15, airR, sim.airPressure/CONFIG.AIR_MAX, sim.airPressure < CONFIG.AIR_LOW_WARN ? '#ff3b30' : '#8fd6ff');
+  hctx.fillStyle = '#cfc6ab'; hctx.font='10px monospace'; hctx.textAlign='center';
+  hctx.fillText(Math.round(sim.airPressure)+' psi', airX, midY - gaugeR*0.15 + airR + 18);
+
+  // pedal bars (throttle/brake/clutch)
+  const barW = 26, barH = 70, barY = panelY + 18;
+  drawBar(hctx, W*0.5 + 260, barY, barW, barH, sim.clutchEngagement, '#4aa3ff', 'CLU');
+  drawBar(hctx, W*0.5 + 300, barY, barW, barH, sim.brakePedal, '#ff3b30', 'BRK');
+  drawBar(hctx, W*0.5 + 340, barY, barW, barH, sim.throttle, '#3ddc84', 'THR');
+
+  // digital gear box
+  const gbX = W*0.5 - 300, gbY = panelY + 22;
+  hctx.fillStyle = '#0c0d0e'; hctx.fillRect(gbX, gbY, 92, 92);
+  hctx.strokeStyle = '#55504a'; hctx.strokeRect(gbX, gbY, 92, 92);
+  hctx.fillStyle = '#ffb020'; hctx.font = 'bold 46px monospace'; hctx.textAlign='center'; hctx.textBaseline='middle';
+  hctx.fillText(sim.gearChangeTimer > 0 ? '~' : sim.currentGear, gbX+46, gbY+48);
+  hctx.fillStyle = '#9a9285'; hctx.font='10px monospace'; hctx.textBaseline='alphabetic';
+  hctx.fillText('GEAR', gbX+46, gbY+86);
+
+  // engine state
+  hctx.textAlign='left';
+  let stateText = 'OFF', stateColor = '#888';
+  if (sim.cranking){ stateText='CRANKING'; stateColor='#ffb020'; }
+  else if (sim.running){ stateText='RUNNING'; stateColor='#3ddc84'; }
+  else { stateText='OFF'; stateColor='#888'; }
+  hctx.font = 'bold 13px monospace'; hctx.fillStyle = stateColor;
+  hctx.fillText('ENGINE: ' + stateText, gbX, gbY + 108);
+  hctx.fillStyle = sim.handbrakeOn ? '#ff3b30' : '#5a5a52';
+  hctx.fillText(sim.handbrakeOn ? 'P  PARK BRAKE SET' : 'P  released', gbX, gbY + 126);
+  const slopePct = gradeSlope(sim.routeProgress) * 100;
+  hctx.fillStyle = '#cfc6ab';
+  hctx.fillText('GRADE: ' + (slopePct>=0?'+':'') + slopePct.toFixed(1) + '%', gbX, gbY + 144);
+
+  // route / milestone readout, top-right
+  hctx.textAlign='right'; hctx.font='bold 13px monospace'; hctx.fillStyle='#e9dfc7';
+  const distKm = (Math.abs(sim.routeProgress) / 1000).toFixed(2);
+  hctx.fillText('NH-31  |  ODO ' + distKm + ' km', W-16, 26);
+
+  // warnings
+  const warnEl = document.getElementById('centerWarn');
+  let warnText = '';
+  if (sim.grindTimer > 0) warnText = 'GRINDING GEARS — PRESS CLUTCH FULLY';
+  else if (!sim.running && !sim.cranking && sim.stalledFlash > 0) warnText = 'ENGINE STALLED — PRESS [I] TO RESTART';
+  else if (!sim.running && !sim.cranking) warnText = 'ENGINE OFF — PRESS [I] TO START';
+  else if (sim.airPressure < CONFIG.AIR_LOW_WARN) warnText = 'LOW AIR PRESSURE';
+  if (warnText){
+    warnEl.textContent = warnText;
+    warnEl.style.opacity = (Math.floor(performance.now()/300) % 2 === 0) ? '1' : '0.35';
+  } else {
+    warnEl.style.opacity = '0';
+  }
+}
+// small helper used by drawHUD for colored gauge zone bands
+function drawArcBand(cx, cy, r, fracStart, fracEnd, color){
+  const startAngle = 150 * Math.PI/180;
+  const sweep = 240 * Math.PI/180;
+  hctx.beginPath();
+  hctx.arc(cx, cy, r-8, startAngle + sweep*fracStart, startAngle + sweep*fracEnd, false);
+  hctx.strokeStyle = color; hctx.lineWidth = 5; hctx.stroke();
+}
+
+/* =====================================================================================
+   15. MAIN LOOP — fixed-timestep physics accumulator + render
+   ===================================================================================== */
+const FIXED_DT = 1/120;
+const MAX_SUBSTEPS = 6;
+let lastTime = performance.now();
+let accumulator = 0;
+
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = (now - lastTime) / 1000;
+  lastTime = now;
+  dt = Math.min(dt, 0.05);
+  accumulator += dt;
+
+  let steps = 0;
+  while (accumulator >= FIXED_DT && steps < MAX_SUBSTEPS){
+    physicsStep(FIXED_DT);
+    SFX.updateEngine(sim.engineRPM, sim.running, sim._load || 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    accumulator -= FIXED_DT;
+    steps++;
+  }
+
+  updateEnvironment(sim.routeProgress);
+  updateTruckVisual(dt);
+  updateCamera(dt);
+  drawHUD();
+
+  renderer.render(scene, camera);
+}
+
+/* =====================================================================================
+   BOOT
+   ===================================================================================== */
+resize();
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('startScreen').style.display = 'none';
+  SFX.init();
+  SFX.resume();
+});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
 
